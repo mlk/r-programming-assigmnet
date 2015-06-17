@@ -29,6 +29,6 @@ byYearForLA$Location <- "Los Angeles County"
 
 byYear = rbind(byYearForBc, byYearForLA)
 
-png("plot5.png", width = 480, height = 480, units = "px")
+png("plot6.png", width = 480, height = 480, units = "px")
 ggplot(byYear, aes(x=Year, y=TotalEmissions, col=Location)) + geom_line()
 dev.off()

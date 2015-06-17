@@ -11,3 +11,4 @@ names(byYear) <- c("Year", "Total Emissions")
 png("plot1.png", width = 480, height = 480, units = "px")
 plot(byYear, type="l", main="Total PM2.5 emissions in USA between 1999 and 2008")
 dev.off()
+
