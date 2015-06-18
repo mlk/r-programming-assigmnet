@@ -1,0 +1,118 @@
+---
+title: "Storm"
+author: "Michael Lee"
+date: "Thursday, June 18, 2015"
+output: html_document
+---
+
+
+
+
+```{r}
+data_root = "./data/"
+file_url = "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+file = paste0(data_root, "stormdata.csv.bz2")
+
+if(!exists(file)) {
+    if(!exists(data_root)) {
+        dir.create(data_root)
+    }
+    download.file(file_url,destfile=file)
+}
+
+acceptedEventTypes = toupper(
+    c("Astronomical Low Tide", "Avalanche",
+      "Blizzard", "Coastal Flood", 
+      "Cold/Wind Chill", "Debris Flow", "Dense Fog",
+      "Dense Smoke", "Drought", "Dust Devil",
+      "Dust Storm", "Excessive Heat", 
+      "Extreme Cold/Wind Chill", "Flash Flood",
+      "Flood", "Freezing Fog", "Frost/Freeze",
+      "Funnel Cloud", "Hail", "Heat", "Heavy Rain",
+      "Heavy Snow", "High Surf", "High Wind",
+      "Hurricane", "Typhoon", "Ice Storm", 
+      "Lakeshore Flood", "Lightning",
+      "Marine Hail", "Marine High Wind",
+      "Marine Strong Wind", 
+      "Marine Thunderstorm Wind", 
+      "Rip Current", "Seiche", "Sleet",
+      "Storm Surge/Tide", "Strong Wind",
+      "Thunderstorm Wind", "Tornado",
+      "Tropical Depression", "Tropical Storm",
+      "Tsunami", "Volcanic Ash", "Waterspout",
+      "Wildfire", "Winter Storm", "Winter Weather"))
+
+
+stormdata = read.csv(file)
+stormdata$BGN_DATE <- as.Date(as.character(stormdata$BGN_DATE), "%m/%d/%Y")
+stormdata$year <- format(stormdata$BGN_DATE, "%Y")
+
+stormdata$EVTYPE <- toupper(as.character(stormdata$EVTYPE))
+stormdata$EVTYPE<-toupper(stormdata$EVTYPE)
+
+stormdata$EVTYPE<-gsub("\\s+", " ", stormdata$EVTYPE)
+stormdata$EVTYPE<-gsub("^\\s+(.*)", "\\1", stormdata$EVTYPE)
+for(i in acceptedEventTypes) {
+    stormdata$EVTYPE<-gsub(paste0(i, ".*"), i, stormdata$EVTYPE)
+}
+stormdata$EVTYPE<-gsub("TORNDAO", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE<-gsub("WILD/FOREST FIRE", "WILDFIRE", stormdata$EVTYPE)
+stormdata$EVTYPE<-gsub("HURRICANE|TYPHOON", "HURRICANE/TYPHOON", stormdata$EVTYPE)
+stormdata$EVTYPE<-gsub("COASTALFLOOD", "COASTAL FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE<-gsub("CSTL FLOOD", "COASTAL FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE<-gsub(".*SURF.*", "HIGH SURF", stormdata$EVTYPE)
+
+stormdata$EVTYPE<-gsub("^FOG", "DENSE FOG", stormdata$EVTYPE)
+stormdata$EVTYPE<-gsub("TSTM", "THUNDERSTORM", stormdata$EVTYPE)
+
+y = stormdata$EVTYPE[!stormdata$EVTYPE %in% acceptedEventTypes]
+floods <- y[grep("FLOOD", y)]
+tide <- y[grep("TIDE", y)]
+thunder <- y[grep("THUND", y)]
+stormdata$EVTYPE[stormdata$EVTYPE %in% thunder] <- "THUNDERSTORM WIND"
+thunder <- y[grep("THUNERSTORM", y)]
+stormdata$EVTYPE[stormdata$EVTYPE %in% thunder] <- "THUNDERSTORM WIND"
+
+stormdata$EVTYPE[stormdata$EVTYPE %in% floods] <- "FLOOD"
+stormdata$EVTYPE[stormdata$EVTYPE %in% tide] <- "STORM SURGE/TIDE"
+stormdata$EVTYPE<-gsub(".*SNOW.*", "HEAVY SNOW", stormdata$EVTYPE)
+stormdata$EVTYPE<-gsub(".*HAIL.*", "HAIL", stormdata$EVTYPE)
+stormdata$EVTYPE<-gsub(".*AVALANCE.*", "AVALANCHE", stormdata$EVTYPE)
+stormdata$EVTYPE<-gsub("WILD FIRES", "WILDFIRE", stormdata$EVTYPE)
+
+y = stormdata$EVTYPE[!stormdata$EVTYPE %in% acceptedEventTypes]
+stormdata$EVTYPE[stormdata$EVTYPE %in% y] = "OTHER"
+
+fatalities <- aggregate(stormdata$FATALITIES, by=list(stormdata$EVTYPE), FUN=sum)
+injuries <- aggregate(stormdata$INJURIES, by=list(stormdata$EVTYPE), FUN=sum)
+names(fatalities) <- c("EventType", "variable")
+fatalities$Type <- "Fatalities"
+names(injuries) <- c("EventType", "variable")
+injuries$Type <- "Injuries"
+# Get the top ten causes of injuries and fatalities.
+names_to_keep <- unique(c(
+    fatalities[order(fatalities$variable, decreasing=TRUE),1][1:10],
+    injuries[order(injuries$variable, decreasing=TRUE),1][1:10]
+    ))
+
+total <- rbind(fatalities, injuries)
+total <- total[total$EventType %in% names_to_keep,]
+
+ggplot(total, aes(x=EventType, y=variable, fill=factor(Type)))+geom_bar(stat="identity")
+```
+
+We have no NAs in the columns we are using in this research
+
+```{r}
+mean(is.na(stormdata$FATALITIES))
+mean(is.na(stormdata$INJURIES))
+mean(is.na(stormdata$PROPDMG))
+```
+
+You can also embed plots, for example:
+
+```{r, echo=FALSE}
+plot(cars)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
