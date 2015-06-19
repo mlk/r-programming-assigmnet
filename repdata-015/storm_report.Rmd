@@ -5,66 +5,154 @@ date: "Thursday, June 18, 2015"
 output: html_document
 ---
 
+Synopsis
+========
 
 
+Data Processing 
+===============
 
-```{r}
+For this project I am using two additonal grapging libraries. `country_choropleth` to provide a choropleth of the US and `ggplot` to provide bar charts.
+
+```{r warning=FALSE}
+library(choroplethr)
+library(ggplot2)
+library(data.table)
+library(dplyr)
+library(knitr)
+```
+
+
+The data is from the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This data is provided as a CSV files stored within a compressed [Bzip2](https://en.wikipedia.org/wiki/Bzip2) file.
+
+We are only using the following columns: `EVTYPE, STATE, FATALITIES, INJURIES, PROPDMG, PROPDMGEXP, CROPDMG, CROPDMGEXP`, so all others have been dropped.
+
+```{r cache=TRUE}
 data_root = "./data/"
 file_url = "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
 file = paste0(data_root, "stormdata.csv.bz2")
 
-if(!exists(file)) {
-    if(!exists(data_root)) {
+if(!file.exists(file)) {
+    if(!file.exists(data_root)) {
         dir.create(data_root)
     }
-    download.file(file_url,destfile=file)
+    download.file(file_url,destfile=file, method="curl")
 }
-
-acceptedEventTypes = toupper(
-    c("Astronomical Low Tide", "Avalanche",
-      "Blizzard", "Coastal Flood", 
-      "Cold/Wind Chill", "Debris Flow", "Dense Fog",
-      "Dense Smoke", "Drought", "Dust Devil",
-      "Dust Storm", "Excessive Heat", 
-      "Extreme Cold/Wind Chill", "Flash Flood",
-      "Flood", "Freezing Fog", "Frost/Freeze",
-      "Funnel Cloud", "Hail", "Heat", "Heavy Rain",
-      "Heavy Snow", "High Surf", "High Wind",
-      "Hurricane", "Typhoon", "Ice Storm", 
-      "Lakeshore Flood", "Lightning",
-      "Marine Hail", "Marine High Wind",
-      "Marine Strong Wind", 
-      "Marine Thunderstorm Wind", 
-      "Rip Current", "Seiche", "Sleet",
-      "Storm Surge/Tide", "Strong Wind",
-      "Thunderstorm Wind", "Tornado",
-      "Tropical Depression", "Tropical Storm",
-      "Tsunami", "Volcanic Ash", "Waterspout",
-      "Wildfire", "Winter Storm", "Winter Weather"))
 
 
 stormdata = read.csv(file)
-stormdata$BGN_DATE <- as.Date(as.character(stormdata$BGN_DATE), "%m/%d/%Y")
-stormdata$year <- format(stormdata$BGN_DATE, "%Y")
+stormdata <- select(stormdata, EVTYPE, STATE, FATALITIES, INJURIES, PROPDMG, PROPDMGEXP, CROPDMG, CROPDMGEXP)
 
+data_size = dim(stormdata)
+number_of_unique_events <- length(unique(stormdata$EVTYPE))
+```
+
+This data set has `r data_size[1]` rows. 
+
+Next the data needs to be tided up. The `EVTYPE` column according to the specification has just 45 types, however it currently contains `r number_of_unique_events`. The list of acceptable events are as follows:
+
+``` {r cache=TRUE}
+acceptedEventTypes = toupper(
+    c("Astronomical Low Tide", 
+      "Avalanche",
+      "Blizzard", 
+      "Coastal Flood", 
+      "Cold/Wind Chill",
+      "Debris Flow", 
+      "Dense Fog",
+      "Dense Smoke",
+      "Drought", 
+      "Dust Devil",
+      "Dust Storm",
+      "Excessive Heat", 
+      "Extreme Cold/Wind Chill",
+      "Flash Flood",
+      "Flood", 
+      "Freezing Fog",
+      "Frost/Freeze",
+      "Funnel Cloud",
+      "Hail",
+      "Heat",
+      "Heavy Rain",
+      "Heavy Snow",
+      "High Surf",
+      "High Wind",
+      "Hurricane", 
+      "Typhoon", 
+      "Ice Storm", 
+      "Lakeshore Flood",
+      "Lightning",
+      "Marine Hail",
+      "Marine High Wind",
+      "Marine Strong Wind", 
+      "Marine Thunderstorm Wind", 
+      "Rip Current",
+      "Seiche", 
+      "Sleet",
+      "Storm Surge/Tide",
+      "Strong Wind",
+      "Thunderstorm Wind",
+      "Tornado",
+      "Tropical Depression",
+      "Tropical Storm",
+      "Tsunami", 
+      "Volcanic Ash",
+      "Waterspout",
+      "Wildfire",
+      "Winter Storm",
+      "Winter Weather"))
+```
+
+First we will convert all the event types to upper case strings and then remove extra whitespace.
+
+```{r cache=TRUE}
 stormdata$EVTYPE <- toupper(as.character(stormdata$EVTYPE))
-stormdata$EVTYPE<-toupper(stormdata$EVTYPE)
 
 stormdata$EVTYPE<-gsub("\\s+", " ", stormdata$EVTYPE)
 stormdata$EVTYPE<-gsub("^\\s+(.*)", "\\1", stormdata$EVTYPE)
+```
+
+This reduces the number of unique events to `r length(unique(stormdata$EVTYPE))`.
+
+Next many of the events have have additional data after the event name, such as the strength of the wind or the name of the Hurricane. So this additonal data is stripped. 
+
+```{r cache=TRUE}
 for(i in acceptedEventTypes) {
     stormdata$EVTYPE<-gsub(paste0(i, ".*"), i, stormdata$EVTYPE)
 }
+```
+This reduces the number of unique events to `r length(unique(stormdata$EVTYPE))`.
+
+Next we will fix some common misspellings.
+
+```{r cache=TRUE}
 stormdata$EVTYPE<-gsub("TORNDAO", "TORNADO", stormdata$EVTYPE)
 stormdata$EVTYPE<-gsub("WILD/FOREST FIRE", "WILDFIRE", stormdata$EVTYPE)
-stormdata$EVTYPE<-gsub("HURRICANE|TYPHOON", "HURRICANE/TYPHOON", stormdata$EVTYPE)
-stormdata$EVTYPE<-gsub("COASTALFLOOD", "COASTAL FLOOD", stormdata$EVTYPE)
 stormdata$EVTYPE<-gsub("CSTL FLOOD", "COASTAL FLOOD", stormdata$EVTYPE)
-stormdata$EVTYPE<-gsub(".*SURF.*", "HIGH SURF", stormdata$EVTYPE)
-
-stormdata$EVTYPE<-gsub("^FOG", "DENSE FOG", stormdata$EVTYPE)
 stormdata$EVTYPE<-gsub("TSTM", "THUNDERSTORM", stormdata$EVTYPE)
+stormdata$EVTYPE<-gsub("COASTALFLOOD", "COASTAL FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE<-gsub(".*AVALANCE.*", "AVALANCHE", stormdata$EVTYPE)
+stormdata$EVTYPE<-gsub("WILD FIRES", "WILDFIRE", stormdata$EVTYPE)
+```
 
+This reduces the number of unique events to `r length(unique(stormdata$EVTYPE))`.
+
+Then we simply some basic terms for events which do not appear in the accepted event types above.
+
+|Keyword|Bucket|
+|-------|------|
+|FLOOD|FLOOD| 
+|THUNDERSTORM|THUNDERSTORM WIND|
+|TIDEs|STORM SURGE/TIDE|
+|SNOW|HEAVY SNOW|
+|HAIL|HAIL|
+|SURF|HIGH SURF|
+|FOG|DENSE FOG|
+
+Finally everything missed we put under a "OTHER" bucket.
+
+
+```{r cache=TRUE}
 y = stormdata$EVTYPE[!stormdata$EVTYPE %in% acceptedEventTypes]
 floods <- y[grep("FLOOD", y)]
 tide <- y[grep("TIDE", y)]
@@ -77,42 +165,120 @@ stormdata$EVTYPE[stormdata$EVTYPE %in% floods] <- "FLOOD"
 stormdata$EVTYPE[stormdata$EVTYPE %in% tide] <- "STORM SURGE/TIDE"
 stormdata$EVTYPE<-gsub(".*SNOW.*", "HEAVY SNOW", stormdata$EVTYPE)
 stormdata$EVTYPE<-gsub(".*HAIL.*", "HAIL", stormdata$EVTYPE)
-stormdata$EVTYPE<-gsub(".*AVALANCE.*", "AVALANCHE", stormdata$EVTYPE)
-stormdata$EVTYPE<-gsub("WILD FIRES", "WILDFIRE", stormdata$EVTYPE)
-
+stormdata$EVTYPE<-gsub(".*SURF.*", "HIGH SURF", stormdata$EVTYPE)
+stormdata$EVTYPE<-gsub("^FOG", "DENSE FOG", stormdata$EVTYPE)
 y = stormdata$EVTYPE[!stormdata$EVTYPE %in% acceptedEventTypes]
 stormdata$EVTYPE[stormdata$EVTYPE %in% y] = "OTHER"
 
+
+stormdata$EVTYPE<-gsub("HURRICANE|TYPHOON", "HURRICANE/TYPHOON", stormdata$EVTYPE)
+```
+
+This reduces the number of unique events to `r length(unique(stormdata$EVTYPE))`.
+
+
+To process this content we will also be using the following columns: FATALITIES, INJURIES and PROPDMG. Luckily none of them contain missing values.
+```{r cache=TRUE}
+columnNames <- c("FATALITIES", "INJURIES", "PROPDMG", "PROPDMGEXP")
+totalNasInColumn <- c(sum(is.na(stormdata$FATALITIES)), sum(is.na(stormdata$INJURIES)),
+            sum(is.na(stormdata$PROPDMG)), sum(is.na(stormdata$PROPDMGEXP)))
+```
+
+```{r results='asis'}
+kable(data.table(columnNames, totalNasInColumn))
+```
+
+The `PROPDMG` needs to be multiplied by the `PROPDMGEXP`, and the  `CROPDMG` needs to be multiplied by the `CROPDMGEXP`. The table below shows the multiplcations we will be doing. 
+```{r}
+multiplerName <- c('0', '1', '2', '3' , '4'  , '5'   , '6'    , '7'     , '8'      , 'b'       , 'h', 'k' , 'm'    , '-', '?', '+')
+multiplerValue <- c( 1,   10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 100, 1000, 1000000, 0, 0, 0)
+multipler <- data.frame(multiplerName, multiplerValue)
+```
+
+```{r results='asis'}
+kable(multipler)
+```
+
+
+```{r cache=TRUE}
+stormdata$PROPDMGEXP <- tolower(stormdata$PROPDMGEXP)
+stormdata$CROPDMGEXP <- tolower(stormdata$CROPDMGEXP)
+stormdata <- merge(stormdata, multipler, by.x=c("PROPDMGEXP"), by.y=c("multiplerName"))
+stormdata <- rename(stormdata, propMuli = multiplerValue)
+stormdata <- merge(stormdata, multipler, by.x=c("CROPDMGEXP"), by.y=c("multiplerName"))
+stormdata <- rename(stormdata, cropMuli = multiplerValue)
+stormdata$propMuli[is.na(stormdata$propMuli)] <- 0
+stormdata$cropMuli[is.na(stormdata$cropMuli)] <- 0
+stormdata <- mutate(stormdata, properitydamage = PROPDMG * propMuli, cropdamage = CROPDMG * cropMuli)
+```
+
+Results
+=======
+
+Across the United States, which types of events are most harmful with respect to population health?
+-------------------------
+
+To calculate this we need to look at the total fatalities and total injuries caused by each event type then grab the top 7 events for both injuries and for fatalities.
+
+```{r}
 fatalities <- aggregate(stormdata$FATALITIES, by=list(stormdata$EVTYPE), FUN=sum)
 injuries <- aggregate(stormdata$INJURIES, by=list(stormdata$EVTYPE), FUN=sum)
 names(fatalities) <- c("EventType", "variable")
 fatalities$Type <- "Fatalities"
 names(injuries) <- c("EventType", "variable")
 injuries$Type <- "Injuries"
-# Get the top ten causes of injuries and fatalities.
+
 names_to_keep <- unique(c(
-    fatalities[order(fatalities$variable, decreasing=TRUE),1][1:10],
-    injuries[order(injuries$variable, decreasing=TRUE),1][1:10]
+    fatalities[order(fatalities$variable, decreasing=TRUE),1][1:7],
+    injuries[order(injuries$variable, decreasing=TRUE),1][1:7]
     ))
 
 total <- rbind(fatalities, injuries)
 total <- total[total$EventType %in% names_to_keep,]
-
-ggplot(total, aes(x=EventType, y=variable, fill=factor(Type)))+geom_bar(stat="identity")
 ```
 
-We have no NAs in the columns we are using in this research
 
 ```{r}
-mean(is.na(stormdata$FATALITIES))
-mean(is.na(stormdata$INJURIES))
-mean(is.na(stormdata$PROPDMG))
+ggplot(total, aes(x=EventType, y=variable, fill=factor(Type)))+geom_bar(stat="identity")  + theme(axis.text.x = element_text(angle=90, vjust=1))
 ```
 
-You can also embed plots, for example:
+This shows that tornados are far and away is the most harmful. However the US is a large place as such we should look at where if this is a event that only effects a small number of states, or is a wider issue across the US. To do this we will display the states where Tornados are the most harmful event type.
 
-```{r, echo=FALSE}
-plot(cars)
+```{r}
+byStateAndType = data.table(aggregate(stormdata$FATALITIES + stormdata$INJURIES, by=list(stormdata$STATE, stormdata$EVTYPE), FUN=sum))
+
+zz=byStateAndType[,list(Group.2 = Group.2[which.max(x)]), by=Group.1]
+setnames(zz, "Group.1", "state_code")
+setnames(zz, "Group.2", "value")
+zz$value[grep("TORNADO", zz$value, invert=T)] = "OTHER"
+
+zz$region<-tolower(state.name[match(zz$state_code, state.abb)])
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r warning=FALSE}
+state_choropleth(zz[!is.na(zz$region)])
+```
+
+Across the United States, which types of events have the greatest economic consequences?
+----------------------------------------------------------------------------------------
+```{r}
+properitydamage <- aggregate(stormdata$properitydamage, by=list(stormdata$EVTYPE), FUN=sum)
+cropdamage <- aggregate(stormdata$cropdamage, by=list(stormdata$EVTYPE), FUN=sum)
+names(properitydamage) <- c("EventType", "variable")
+properitydamage$Type <- "Properity"
+names(cropdamage) <- c("EventType", "variable")
+cropdamage$Type <- "Crop"
+
+names_to_keep <- unique(c(
+    fatalities[order(properitydamage$variable, decreasing=TRUE),1][1:7],
+    injuries[order(cropdamage$variable, decreasing=TRUE),1][1:7]
+    ))
+
+total <- rbind(properitydamage, cropdamage)
+total <- total[total$EventType %in% names_to_keep,]
+```
+
+
+```{r}
+ggplot(total, aes(x=EventType, y=variable, fill=factor(Type)))+geom_bar(stat="identity")  + theme(axis.text.x = element_text(angle=90, vjust=1))
+```
